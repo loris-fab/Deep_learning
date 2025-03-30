@@ -18,7 +18,6 @@ import sys
 import os
 
 
-import torch
 
 # 📌 Chargement du modèle Silero VAD
 model_and_utils = torch.hub.load(
@@ -232,3 +231,97 @@ def preprocess_all_audio(audio_path, output_audio_clean_path):
         print(f"❌ Aucun fichier audio n'a été traité.")
 
     return df
+
+
+# SECOND FILTER : FILTER TEXT IN IMAGES WITH OCR AND NLP
+
+
+def seconds_to_hhmmss(seconds):
+    return str(timedelta(seconds=int(seconds)))
+
+def approximate_hate_speech_from_text_from_image(
+    video_path: str,
+    sampling_time_froid: float,
+    sampling_time_chaud: float,
+    time_to_recover: float,
+    merge_final_snippet_time: float,
+    detect_hate_speech_in_image
+):
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        raise ValueError("Could not open video file")
+
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    duration = total_frames / fps
+
+    current_time = 0.0
+    state = "froid"
+    time_in_chaud = 0.0
+    hate_timestamps = []
+
+    while current_time < duration:
+        cap.set(cv2.CAP_PROP_POS_MSEC, current_time * 1000)
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        temp_image_path = "/tmp/temp_frame.jpg"
+        cv2.imwrite(temp_image_path, frame)
+
+        result = detect_hate_speech_in_image(temp_image_path)
+        os.remove(temp_image_path)
+
+        if result.get("hate_detected", False):
+            hate_timestamps.append(current_time)
+            state = "chaud"
+            time_in_chaud = 0.0
+        elif state == "chaud":
+            time_in_chaud += sampling_time_chaud
+            if time_in_chaud >= time_to_recover:
+                state = "froid"
+
+        current_time += sampling_time_chaud if state == "chaud" else sampling_time_froid
+
+    cap.release()
+
+    # Fusion of the time intervals
+    intervals = [(max(0, t - merge_final_snippet_time), min(duration, t + merge_final_snippet_time)) for t in hate_timestamps]
+    merged_intervals = []
+    for start, end in sorted(intervals):
+        if not merged_intervals or start > merged_intervals[-1][1]:
+            merged_intervals.append([start, end])
+        else:
+            merged_intervals[-1][1] = max(merged_intervals[-1][1], end)
+
+    # Formater les intervalles
+    formatted_intervals = [[seconds_to_hhmmss(start), seconds_to_hhmmss(end)] for start, end in merged_intervals]
+
+    return formatted_intervals
+
+
+reader = easyocr.Reader(['en'])  # detects the language of the text
+nlp_classifier = pipeline("text-classification", model="Hate-speech-CNERG/dehatebert-mono-english")
+
+def detect_hate_speech_in_image(image_path):
+    # 🖼️ OCR
+    text_blocks = reader.readtext(image_path, detail=0)
+    full_text = " ".join(text_blocks).strip()
+
+    if not full_text:
+        return {
+            "text": None,
+            "hate_detected": False,
+            "score": 0.0,
+            "reason": "No text detected"
+        }
+
+    # 🧠 NLP (classification hate speech)
+    prediction = nlp_classifier(full_text)[0]
+
+    return {
+        "text": full_text,
+        "hate_detected": prediction['label'].lower() == 'hate',
+        "score": float(prediction['score']),
+        "reason": prediction['label']
+    }
