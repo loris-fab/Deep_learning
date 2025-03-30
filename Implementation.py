@@ -184,7 +184,7 @@ def preprocess_audio(input_path, output_path):
     else:
         threshold = 0.7  # Silence ou bruit → Ignorer
     """
-    threshold = 0.5
+    threshold = 0.4
 
     # 🔹 2. Réduction du bruit
     audio = nr.reduce_noise(y=audio, sr=sr)
@@ -206,13 +206,29 @@ def preprocess_audio(input_path, output_path):
 
     print(f"✅ Audio nettoyé et sauvegardé : {output_path}")
     #print(f"🎵 Catégorie détectée : {category} → Threshold = {threshold}")
-    print(f"🎙️ Segments parlés détectés : {speech_ranges}")
+    #print(f"🎙️ Segments parlés détectés : {speech_ranges}")
 
     return speech_ranges
 
-def preprocess_all_audio(audio_path, output_audio_clean_path):
 
-    if os.path.exists(output_audio_clean_path):
-        print(f"✅ Audio extrait avec succès : {output_audio_clean_path}")
+import os
+import pandas as pd
+
+def preprocess_all_audio(audio_path, output_audio_clean_path):
+    data = []
+    
+    for i, audio_file in enumerate(os.listdir(audio_path)):
+        if audio_file.endswith(".wav"):
+            input_audio_path = os.path.join(audio_path, audio_file)
+            output_clean_path = os.path.join(output_audio_clean_path, audio_file)
+            
+            speech_ranges = preprocess_audio(input_audio_path, output_clean_path)
+            data.append({"audio_name": audio_file, "speech_ranges": speech_ranges})
+    df = pd.DataFrame(data)
+
+    if data:  # Vérifie si au moins un fichier a été traité
+        print(f"✅ {len(data)} fichiers audio nettoyés avec succès.")
     else:
-        print(f"❌ Échec de l'extraction audio pour : {audio_path}")
+        print(f"❌ Aucun fichier audio n'a été traité.")
+
+    return df
