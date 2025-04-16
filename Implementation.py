@@ -15,13 +15,15 @@ import subprocess
 import sys
 import os
 import torch
+import torch.nn as nn
 import cv2
 from datetime import timedelta
 import easyocr
 from transformers import pipeline
 from codecarbon import EmissionsTracker
-from transformers import CLIPProcessor, CLIPModel
+from transformers import CLIPProcessor, CLIPModel, AutoTokenizer, BertModel
 from PIL import Image
+import re
 
 
 
@@ -268,9 +270,235 @@ def preprocess_all_audio(audio_path, output_audio_clean_path):
 # FIRST FILTER : Hate speech detection in audio
 def detect_hate_speech_in_audio(audio_path , include_intervals):
     ## TODO : Implement the hate speech detection in audio
-    hate_speech_time_audio = []
+    speech_ranges = include_intervals
+    timestamps = []
+    texts = []
+    emotions = []
+    # Speech_ranges_to_timestamps
+    #timestamps, texts = Speech_ranges_to_timestamps(audio_path, speech_ranges)
+
+    # audio_to_emotion 
+    #emotions = Audio_to_emotion(audio_path,timestamps)
+
+    df = pd.DataFrame({
+        "timestamp": timestamps,
+        "text": texts,
+        "emotion": emotions
+    })
+
+
+    # PARTIE PREPROCESSE dataframe **********
+    exploded_df = pd.concat([explode_row(row) for _, row in df.iterrows()], ignore_index=True)
+
+    exploded_df["hate_snippet"] = exploded_df["hate_snippet"].apply(clean_hate_snippet)
+
+    # Enlever les caractères spéciaux
+    exploded_df["text"] = exploded_df["text"].apply(clean_text_light)
+
+
+    # Créer une clé de groupe si l’émotion ou le hate_snippet change
+    group_key = ((exploded_df['emotion'] != exploded_df['emotion'].shift()) | (exploded_df['hate_snippet'] != exploded_df['hate_snippet'].shift())).cumsum()
+    exploded_df = pd.concat([merge_consecutive(g) for _, g in exploded_df.groupby(group_key)], ignore_index=True)
+
+    # Supprimer les lignes avec moins de 3 mots dans la colonne 'text'
+    exploded_df = exploded_df[exploded_df["text"].str.split().str.len() >= 3]
+    exploded_df['text'] = exploded_df['text'].str.strip()
+    # Supprimer les lignes doublon
+    exploded_df = exploded_df.drop_duplicates(subset='text')
+
+    # Creer une nouvelle colonne "Label_hate" avec la fonction get_label_hate
+    exploded_df["Label_hate"] = exploded_df.apply(lambda row: get_label_hate(row["timestamp"], row["hate_snippet"]), axis=1)
+    # ************************
+
+    df = EmoHateBert_prediction_from_csv(exploded_df, "EmoHateBert_local.pt", device="cuda")
+
+    hate_speech_time_audio = [timestamp for timestamp, text, emotion, label in zip(df["timestamp"], df["text"], df["emotion"], df["predicted_label"]) if label == 1]
     return hate_speech_time_audio
 
+
+def merge_consecutive(group):
+    merged = []
+    current_start = group['timestamp'].iloc[0][0]
+    current_end = group['timestamp'].iloc[0][1]
+    current_text = group['text'].iloc[0]
+
+    for i in range(1, len(group)):
+        prev_end = group['timestamp'].iloc[i - 1][1]
+        curr_start, curr_end_val = group['timestamp'].iloc[i]
+
+        if prev_end == curr_start:
+            current_end = curr_end_val
+            current_text += ' ' + group['text'].iloc[i]
+        else:
+            merged.append({
+                'timestamp': f"{current_start} - {current_end}",
+                'text': current_text,
+                'emotion': group['emotion'].iloc[i - 1],
+                'hate_snippet': group['hate_snippet'].iloc[i - 1]
+            })
+            current_start = curr_start
+            current_end = curr_end_val
+            current_text = group['text'].iloc[i]
+
+    merged.append({
+        'timestamp': f"{current_start} - {current_end}",
+        'text': current_text,
+        'emotion': group['emotion'].iloc[-1],
+        'hate_snippet': group['hate_snippet'].iloc[-1]
+    })
+
+    return pd.DataFrame(merged)
+
+
+def clean_text_light(text):
+    # Supprime les caractères très spéciaux, mais garde les lettres, chiffres et ponctuation classique
+    return re.sub(r"[^\w\s.,!?'-]", "", text)
+
+def get_label_hate(timestamp, snippets):
+    t_start, t_end = map(time_to_seconds, timestamp)
+    label = 0
+    if snippets is None:
+        return 0
+    for snippet in snippets:
+        s_start, s_end = map(time_to_seconds, snippet)
+        if t_start >= s_start and t_end <= s_end:
+            return 1  # entièrement inclus
+        elif t_start < s_end and t_end > s_start:
+            label = 2  # partiellement inclus
+    return label
+
+
+def explode_row(row):
+    timestamps = eval(row['Timestamps'])
+    texts = eval(row['Texts'])
+    emotions = eval(row['emotion'])
+    hate_snippet = eval(row['hate_snippet']) if pd.notna(row['hate_snippet']) else [None] * len(timestamps)
+
+    return pd.DataFrame({
+        "hate_snippet": [hate_snippet] * len(timestamps),
+        "timestamp": timestamps,
+        "text": texts,
+        "emotion": emotions
+    })
+
+def clean_hate_snippet(snippet):
+    if isinstance(snippet, list) and snippet and snippet[0] is None:
+        return None
+    return snippet
+
+from torch.utils.data import DataLoader, Dataset
+
+class HateSpeechDataset(Dataset):
+    def __init__(self, texts, emotions, labels, tokenizer, emotion2id):
+        self.texts = texts
+        self.emotions = emotions
+        self.labels = labels
+        self.tokenizer = tokenizer
+        self.emotion2id = emotion2id
+
+    def __len__(self):
+        return len(self.texts)
+
+    def __getitem__(self, idx):
+        text = self.texts[idx]
+        emotion = self.emotions[idx]
+        label = self.labels[idx]
+
+        tokens = self.tokenizer(text, padding='max_length', truncation=True, max_length=128, return_tensors='pt')
+
+        return {
+            'input_ids': tokens['input_ids'].squeeze(0),
+            'attention_mask': tokens['attention_mask'].squeeze(0),
+            'emotion_id': torch.tensor(self.emotion2id[emotion]),
+            'label': torch.tensor(label)
+        }
+
+class FocalLoss(nn.Module):
+    def __init__(self, alpha=1, gamma=2):
+        super().__init__()
+        self.alpha = alpha
+        self.gamma = gamma
+        self.ce = nn.CrossEntropyLoss(reduction='none')  # important pour Focal
+
+    def forward(self, logits, targets):
+        ce_loss = self.ce(logits, targets)
+        pt = torch.exp(-ce_loss)
+        focal_loss = self.alpha * (1 - pt) ** self.gamma * ce_loss
+        return focal_loss.mean()
+
+
+class BertWithEmotion(nn.Module):
+    def __init__(self, emotion_vocab_size=5, emotion_dim=16, num_labels=2,
+                 class_weights=None, use_focal=False, focal_alpha=1, focal_gamma=2):
+        super().__init__()
+        self.bert = BertModel.from_pretrained("bert-base-uncased")
+        self.bert_hidden = self.bert.config.hidden_size
+        self.emotion_embed = nn.Embedding(emotion_vocab_size, emotion_dim)
+        self.dropout = nn.Dropout(0.3)
+        self.classifier = nn.Linear(self.bert_hidden + emotion_dim, num_labels)
+
+        if use_focal:
+            self.criterion = FocalLoss(alpha=focal_alpha, gamma=focal_gamma)
+        else:
+            if class_weights is not None:
+                self.criterion = nn.CrossEntropyLoss(weight=class_weights)
+            else:
+                self.criterion = nn.CrossEntropyLoss()
+
+    def forward(self, input_ids, attention_mask, emotion_id, labels=None):
+        bert_out = self.bert(input_ids=input_ids, attention_mask=attention_mask)
+        cls_vector = bert_out.last_hidden_state[:, 0, :]
+        emotion_vector = self.emotion_embed(emotion_id)
+
+        fusion = torch.cat([cls_vector, emotion_vector], dim=1)
+        fusion = self.dropout(fusion)
+        logits = self.classifier(fusion)
+
+        if labels is not None:
+            loss = self.criterion(logits, labels)
+            return loss, logits
+        return logits
+
+def EmoHateBert_prediction_from_csv(df, model_path, emotion2id = {'ANGRY': 0, 'DISGUSTED': 1, 'FEARFUL': 2, 'HAPPY': 3, 'NEUTRAL': 4, 'SAD': 5, 'SURPRISED': 6, 'UNKNOWN': 7}, device='cpu'):
+    # Charger les données
+    df = df[["text", "emotion", "Label_hate"]].dropna()
+    df["emotion"] = df["emotion"].str.upper()
+    df["Label_hate"] = df["Label_hate"].replace(2, 1)  # optionnel si binaire
+
+    # Tokenizer
+    tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+
+    # Charger dataset
+    dataset = HateSpeechDataset(
+    texts=df["text"].tolist(),
+    emotions=df["emotion"].tolist(),
+    labels=df["Label_hate"].tolist(),
+    tokenizer=tokenizer,
+    emotion2id=emotion2id
+    )
+    
+    loader = DataLoader(dataset, batch_size=16)
+
+    # Charger le modèle
+    model = BertWithEmotion(emotion_vocab_size=len(emotion2id), emotion_dim=16, num_labels=2)
+    model.load_state_dict(torch.load(model_path, map_location=device))
+    model.eval()
+    model.to(device)
+
+    # Prédictions
+    all_preds = []
+    with torch.no_grad():
+        for batch in loader:
+            input_ids = batch["input_ids"].to(device)
+            attention_mask = batch["attention_mask"].to(device)
+            emotion_id = batch["emotion_id"].to(device)
+
+            logits = model(input_ids, attention_mask, emotion_id)
+            preds = torch.argmax(logits, dim=1)
+            all_preds.extend(preds.cpu().numpy())
+
+    df["predicted_label"] = all_preds
+    return df
 
 
 # SECOND FILTER : Hate Speech Detection CLIP (symbole, geste obscene ... etc)
