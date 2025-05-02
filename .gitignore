@@ -4,5 +4,8 @@ Clean_data.ipynb
 First_filter_test.ipynb
 Second_filter.ipynb
 Third_filter.ipynb
-
+Comparaison_model.ipynb
 EmoHateBert_local.pt
+EmoHateBert_cross_3.pt
+loading.gif
+pipeline.png
