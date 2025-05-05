@@ -101,8 +101,7 @@ pip install -r requirements.txt
 ```
 
 3. **Place the required model files** into the `repository` folder:
-link : https://www.swisstransfer.com/d/755fdc17-c422-477c-be3f-62369a37105c
-send email: loris.fabbro@epfl.ch
+(link : https://www.swisstransfer.com/d/755fdc17-c422-477c-be3f-62369a37105c or send email: loris.fabbro@epfl.ch)
    * `student_distilled_EmoHateBERT.pt`
    * `EmoHateBert_teacher.pt`
 
