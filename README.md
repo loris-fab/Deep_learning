@@ -101,11 +101,11 @@ pip install -r requirements.txt
 ```
 
 3. **Place the required model files** into the `repository` folder:
-link : 
+link : https://www.swisstransfer.com/d/755fdc17-c422-477c-be3f-62369a37105c
    * `student_distilled_EmoHateBERT.pt`
    * `EmoHateBert_teacher.pt`
 
-4. **Launch the app**:
+5. **Launch the app**:
 
 ```bash
 python app2.py
