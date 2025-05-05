@@ -75,7 +75,7 @@ Example output:
 .
 ├── app.py                  # Gradio interface
 ├── Implementation.py       # Full processing logic (audio, vision, OCR, NLP)
-├── model/                  # Pretrained model files (.pt)
+├── model.py                # Pretrained model (.pt)
 ├── pipeline.png            # Optional pipeline diagram
 ├── loading.gif             # Custom loading animation
 ├── requirements.txt        # Python dependencies
@@ -90,7 +90,7 @@ Example output:
 1. **Clone the repository**:
 
 ```bash
-git clone 
+git clone <Our repository>
 
 ````
 
@@ -100,8 +100,8 @@ git clone
 pip install -r requirements.txt
 ```
 
-3. **Place the required model files** into the `model/` folder:
-
+3. **Place the required model files** into the `repository` folder:
+link : 
    * `student_distilled_EmoHateBERT.pt`
    * `EmoHateBert_teacher.pt`
 
