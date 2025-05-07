@@ -54,6 +54,7 @@ We thank the authors for making this resource publicly available.
 
 ## 🎛️ Interface (Gradio/Hugging_face)
 link : https://huggingface.co/spaces/Lorissss/Detection_hate_speech
+
 The interface lets you:
 - Upload **a video or audio file**
 - Choose the **eco mode** and run the **hate speech detection**
