@@ -39,7 +39,7 @@ model_and_utils = torch.hub.load(
     repo_or_dir='snakers4/silero-vad',
     model='silero_vad',
     force_reload=True,
-    trust_repo=True  # Évite l'avertissement "untrusted repository"
+    trust_repo=True 
 )
 
 # 📌 Extraction correcte des éléments du tuple
@@ -76,6 +76,9 @@ def extract_audio(video_path, output_audio_path):
 
 
 def extract_all_audio(Video_folder, Audio_folder):
+    """
+    Extrait tous les audios d'un folder
+    """
     print("##########################################")
     for video in os.listdir(Video_folder):
         if video.endswith(".mp4"):
@@ -260,6 +263,19 @@ import os
 import pandas as pd
 
 def preprocess_all_audio(audio_path, output_audio_clean_path):
+    """
+    Prétraite tous les fichiers audio (.wav) d’un dossier donné :
+    - Applique le nettoyage audio (réduction de bruit + détection de voix).
+    - Sauvegarde les versions nettoyées dans un dossier de sortie.
+    - Enregistre les plages temporelles contenant de la parole.
+
+    Args:
+        audio_path (str): Chemin du dossier contenant les fichiers audio bruts (.wav).
+        output_audio_clean_path (str): Chemin du dossier où enregistrer les fichiers nettoyés.
+
+    Returns:
+        pd.DataFrame: Tableau contenant les noms des fichiers audio et leurs timestamps parlés.
+    """
     data = []
     
     for i, audio_file in enumerate(os.listdir(audio_path)):
@@ -283,9 +299,29 @@ def preprocess_all_audio(audio_path, output_audio_clean_path):
 # FIRST FILTER : Hate speech detection in audio
 
 def load_whisper_model(model_name: str = "base"):
+    """
+    Charge un modèle Whisper pré-entraîné pour la transcription audio.
+
+    Args:
+        model_name (str): Nom du modèle Whisper (ex. 'base', 'small', etc.).
+
+    Returns:
+        whisper.Whisper: Modèle Whisper chargé.
+    """
     return whisper.load_model(model_name)
 
 def extract_audi_range(audio_path, start, end):
+    """
+    Extrait un segment d’un fichier audio WAV et le sauvegarde temporairement.
+
+    Args:
+        audio_path (str): Chemin du fichier audio d’origine (.wav).
+        start (float): Temps de début du segment (en secondes).
+        end (float): Temps de fin du segment (en secondes).
+
+    Returns:
+        str: Chemin du fichier audio temporaire contenant le segment.
+    """
     audio = AudioSegment.from_wav(audio_path)
     segment = audio[start * 1000:end * 1000]  # convert to milliseconds
     temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
@@ -293,6 +329,15 @@ def extract_audi_range(audio_path, start, end):
     return temp_file.name
 
 def parse_timstamp(ts):
+    """
+    Convertit un timestamp (HH:MM:SS, float ou int) en secondes.
+
+    Args:
+        ts (str | float | int): Timestamp à convertir.
+
+    Returns:
+        float: Valeur du timestamp en secondes.
+    """
     if isinstance(ts, (float, int)):
         return float(ts)
     if isinstance(ts, str) and ":" in ts:
@@ -301,6 +346,17 @@ def parse_timstamp(ts):
     return float(ts)
 
 def transcribe_audio(model, audio_path: str, speech_ranges=None) -> dict:
+    """
+    Transcrit un fichier audio ou des segments spécifiques avec Whisper.
+
+    Args:
+        model: Modèle Whisper chargé.
+        audio_path (str): Chemin du fichier audio.
+        speech_ranges (list of tuple, optional): Intervalles à transcrire [(start, end)].
+
+    Returns:
+        dict: Dictionnaire contenant une clé "segments" avec les résultats de transcription.
+    """
     if not os.path.exists(audio_path):
         raise FileNotFoundError(f"Audio file not found: {audio_path}")
 
@@ -331,6 +387,15 @@ def transcribe_audio(model, audio_path: str, speech_ranges=None) -> dict:
     return {"segments": all_segments}
 
 def process_dataset(dataset_path: str, model, input_csv: str, output_csv: str) -> None:
+    """
+    Traite un dataset audio en transcrivant les segments parlés spécifiés dans un CSV.
+
+    Args:
+        dataset_path (str): Dossier racine des fichiers audio.
+        model: Modèle Whisper chargé.
+        input_csv (str): CSV d’entrée contenant les métadonnées (timestamps, labels...).
+        output_csv (str): CSV de sortie avec les transcriptions.
+    """
     with open(input_csv, mode='r', newline='', encoding='utf-8') as infile:
         reader = csv.reader(infile)
         header = next(reader)
@@ -419,10 +484,29 @@ def speech_ranges_to_timestamps(audio_path, speech_ranges, model_name="base"):
 
 
 def tosec(t):
+    """
+    Convertit un timestamp au format 'HH:MM:SS' en secondes.
+
+    Args:
+        t (str): Timestamp sous forme de chaîne ('hh:mm:ss').
+
+    Returns:
+        float: Temps total en secondes.
+    """
     h, m, s = map(float, t.split(":"))
     return h * 3600 + m * 60 + s
 
 def extract_wavv(audio_path, start_sec, end_sec, out_path):
+    """
+    Extrait un segment audio (en secondes) depuis un fichier WAV
+    et le sauvegarde dans un nouveau fichier.
+
+    Args:
+        audio_path (str): Chemin du fichier audio source.
+        start_sec (float): Temps de début du segment (en secondes).
+        end_sec (float): Temps de fin du segment (en secondes).
+        out_path (str): Chemin de sortie du segment extrait (.wav).
+    """
     waveform, sr = torchaudio.load(audio_path)
     start_frame = int(sr * start_sec)
     end_frame = int(sr * end_sec)
@@ -430,6 +514,17 @@ def extract_wavv(audio_path, start_sec, end_sec, out_path):
     torchaudio.save(out_path, segment, sample_rate=sr)
 
 def get_emotion_from_segment(wav_path, model, kwargs):
+    """
+    Prédit l’émotion dominante dans un segment audio à l’aide du modèle SenseVoice.
+
+    Args:
+        wav_path (str): Chemin vers le fichier audio (.wav).
+        model: Modèle SenseVoice chargé.
+        kwargs (dict): Paramètres additionnels pour l'inférence.
+
+    Returns:
+        str: Émotion prédite ou message d'erreur.
+    """
     try:
         res = model.inference(
             data_in=wav_path,
@@ -500,6 +595,22 @@ def Audio_to_emotion(audio_path, timestamps):
     return emotions
 
 def detect_hate_speech_in_audio(audio_path , include_intervals,Co2_release):
+    """
+    Détecte les segments de discours haineux dans un fichier audio.
+
+    Étapes :
+    - Transcription des segments audio spécifiés.
+    - Détection des émotions dans chaque segment.
+    - Prédiction du caractère haineux à l’aide du modèle EmoHateBERT.
+
+    Args:
+        audio_path (str): Chemin vers le fichier audio à analyser (.wav).
+        include_intervals (list): Intervalles temporels à analyser [[start, end], ...] au format HH:MM:SS.
+        Co2_release (str): Niveau de consommation carbone autorisé ("low", "medium", "high").
+
+    Returns:
+        list: Liste des timestamps (format HH:MM:SS) où un discours haineux a été détecté.
+    """
     ## TODO : Implement the hate speech detection in audio
     speech_ranges = include_intervals
     timestamps = []
@@ -535,6 +646,15 @@ def detect_hate_speech_in_audio(audio_path , include_intervals,Co2_release):
 
 
 def merge_consecutive(group):
+    """
+    Fusionne les segments consécutifs qui se touchent et concatène leurs textes.
+
+    Args:
+        group (pd.DataFrame): DataFrame avec colonnes 'timestamp', 'text', 'emotion', 'hate_snippet'.
+
+    Returns:
+        pd.DataFrame: Segments fusionnés avec timestamps combinés.
+    """
     merged = []
     current_start = group['timestamp'].iloc[0][0]
     current_end = group['timestamp'].iloc[0][1]
@@ -569,10 +689,32 @@ def merge_consecutive(group):
 
 
 def clean_text_light(text):
+    """
+    Nettoie un texte en supprimant les caractères spéciaux non usuels.
+
+    Args:
+        text (str): Texte à nettoyer.
+
+    Returns:
+        str: Texte nettoyé.
+    """
     # Supprime les caractères très spéciaux, mais garde les lettres, chiffres et ponctuation classique
     return re.sub(r"[^\w\s.,!?'-]", "", text)
 
 def get_label_hate(timestamp, snippets):
+    """
+    Attribue un label à un segment en fonction de sa correspondance avec des snippets haineux.
+
+    Args:
+        timestamp (list): [start, end] au format HH:MM:SS.
+        snippets (list): Liste de snippets [[start, end]] à comparer.
+
+    Returns:
+        int:
+            - 0 : pas inclus
+            - 1 : entièrement inclus
+            - 2 : partiellement inclus
+    """
     t_start, t_end = map(time_to_seconds, timestamp)
     label = 0
     if snippets is None:
@@ -587,6 +729,16 @@ def get_label_hate(timestamp, snippets):
 
 
 def explode_row(row):
+    """
+    Décompose une ligne de DataFrame contenant des listes (timestamps, textes, émotions, hate_snippet)
+    en plusieurs lignes unitaires.
+
+    Args:
+        row (pd.Series): Ligne du DataFrame contenant des listes.
+
+    Returns:
+        pd.DataFrame: Lignes éclatées avec une ligne par segment.
+    """
     timestamps = eval(row['Timestamps'])
     texts = eval(row['Texts'])
     emotions = eval(row['emotion'])
@@ -600,6 +752,15 @@ def explode_row(row):
     })
 
 def clean_hate_snippet(snippet):
+    """
+    Nettoie une liste de snippets. Retourne None si elle ne contient que des valeurs nulles.
+
+    Args:
+        snippet (list): Liste à vérifier.
+
+    Returns:
+        list | None: Liste nettoyée ou None.
+    """
     if isinstance(snippet, list) and snippet and snippet[0] is None:
         return None
     return snippet
@@ -654,6 +815,19 @@ class BertWithEmotion(nn.Module):
         return logits
 
 def EmoHateBert_predict(df, model_path, emotion2id=None, device='cpu'):
+    """
+    Prédit automatiquement si un texte est haineux en tenant compte de l’émotion associée,
+    à l’aide d’un modèle BERT enrichi par embeddings émotionnels.
+
+    Args:
+        df (pd.DataFrame): DataFrame contenant les colonnes 'text', 'emotion' et 'timestamp'.
+        model_path (str): Chemin vers le fichier .pt du modèle entraîné (BertWithEmotion).
+        emotion2id (dict, optional): Dictionnaire mappant les émotions à un ID. Si None, un mapping par défaut est utilisé.
+        device (str): 'cpu' ou 'cuda' selon l'appareil utilisé.
+
+    Returns:
+        pd.DataFrame: Le DataFrame d'entrée enrichi d’une colonne 'predicted_label' (1 = haine, 0 = non-haine).
+    """
     # Vérification et valeurs par défaut
     if emotion2id is None:
         emotion2id = {'ANGRY': 0, 'DISGUSTED': 1, 'FEARFUL': 2, 
@@ -779,6 +953,29 @@ visual_labels = [
 
 
 def detect_visual_hate_clip(image_path):
+    """
+    Analyse une image avec le modèle CLIP pour détecter un contenu visuellement haineux.
+
+    Le modèle compare l'image à une liste de descriptions textuelles (gestes, symboles, scènes).
+    Calcule les probabilités d'association entre l'image et chaque label.
+    Classe ensuite l'image en trois catégories :
+        - "Hate" si elle correspond majoritairement à des labels haineux,
+        - "Safe" si elle correspond à des labels non-haineux,
+        - "Uncertain" si la détection est ambiguë.
+
+    Args:
+        image_path (str): Chemin vers l’image à analyser.
+
+    Returns:
+        dict: Résultat de la détection avec les clés suivantes :
+            - label (str): "Hate", "Safe" ou "Uncertain"
+            - confidence_gap (float): Différence entre scores hate/safe
+            - top_label (str): Label le plus probable
+            - top_score (float): Score associé au top label
+            - avg_hate_score (float): Score moyen des labels haineux
+            - avg_safe_score (float): Score moyen des labels sûrs
+            - all_scores (dict): Tous les scores image-texte
+    """
     image = Image.open(image_path).convert("RGB")
 
     # Préparer les entrées pour CLIP
@@ -837,6 +1034,26 @@ def detect_hate_speech_CLIP(
     detect_visual_hate_clip=None,
     skip_intervals=None  
 ):
+    """
+    Analyse visuellement une vidéo pour détecter des signes de haine (gestes, symboles, etc.)
+    en utilisant le modèle CLIP sur des frames extraites à intervalles réguliers.
+
+    Le processus alterne entre deux états :
+    - "froid" : balayage large, rapide.
+    - "chaud" : balayage fin quand un contenu haineux est détecté.
+
+    Args:
+        video_path (str): Chemin vers la vidéo à analyser.
+        sampling_time_froid (float): Intervalle de sampling en secondes en mode "froid".
+        sampling_time_chaud (float): Intervalle de sampling en mode "chaud".
+        time_to_recover (float): Temps nécessaire sans détection haineuse pour revenir en mode "froid".
+        merge_final_snippet_time (float): Durée ajoutée avant/après chaque détection pour créer un intervalle étendu.
+        detect_visual_hate_clip (function): Fonction d’analyse d’image renvoyant un label "Hate", "Safe" ou "Uncertain".
+        skip_intervals (list, optional): Intervalles à ignorer pendant l’analyse [[start, end]] au format "HH:MM:SS".
+
+    Returns:
+        list: Liste des intervalles [start, end] au format "HH:MM:SS" où du contenu haineux a été détecté.
+    """
     if detect_visual_hate_clip is None:
         raise ValueError("You must provide a detect_visual_hate_clip function")
 
@@ -916,6 +1133,21 @@ reader = easyocr.Reader(['en'])  # detects the language of the text
 nlp_classifier = pipeline("text-classification", model="Hate-speech-CNERG/dehatebert-mono-english")
 
 def detect_hate_speech_in_image(image_path):
+    """
+    Détecte automatiquement la présence de discours haineux dans une image en combinant :
+    - OCR (extraction de texte via EasyOCR)
+    - Classification du texte avec un modèle NLP (DeHateBERT)
+
+    Args:
+        image_path (str): Chemin de l’image à analyser.
+
+    Returns:
+        dict: Résultat de la détection avec les clés :
+            - text (str | None): Texte extrait de l’image.
+            - hate_detected (bool): True si le texte est classé comme haineux.
+            - score (float): Score de confiance du modèle.
+            - reason (str): Label prédit par le classifieur ("HATE" ou autre).
+    """
     # 🖼️ OCR
     text_blocks = reader.readtext(image_path, detail=0)
     full_text = " ".join(text_blocks).strip()
@@ -947,6 +1179,26 @@ def detect_hate_speech_OCR(
     detect_hate_speech_in_image=None,
     skip_intervals=None  # nouvelle option : intervalles à ignorer
 ):
+    """
+    Analyse les textes présents dans une vidéo (pancartes, messages affichés à l’écran, etc.)
+    en extrayant des images régulièrement et en détectant le hate speech via OCR + NLP.
+
+    Le processus adapte la fréquence d’analyse :
+    - "froid" : frames analysées à intervalle espacé.
+    - "chaud" : frames analysées plus souvent en cas de détection de haine.
+
+    Args:
+        video_path (str): Chemin vers la vidéo à analyser.
+        sampling_time_froid (float): Intervalle d’analyse en secondes en état "froid".
+        sampling_time_chaud (float): Intervalle d’analyse en état "chaud".
+        time_to_recover (float): Temps sans haine détectée pour revenir en mode "froid".
+        merge_final_snippet_time (float): Durée à ajouter avant/après chaque détection pour créer un intervalle élargi.
+        detect_hate_speech_in_image (function): Fonction qui analyse une image et retourne un booléen `hate_detected`.
+        skip_intervals (list, optional): Intervalles à ignorer [[start, end]] au format "HH:MM:SS".
+
+    Returns:
+        list: Liste des intervalles [start, end] (en "HH:MM:SS") où du texte haineux a été détecté dans la vidéo.
+    """
     if detect_hate_speech_in_image is None:
         raise ValueError("You must provide a detect_hate_speech_in_image function")
 
@@ -1024,6 +1276,17 @@ def detect_hate_speech_OCR(
 # FINAL FUNCTION
 
 def merge_all_snippet_groups(list_of_snippet_lists):
+    """
+    Fusionne plusieurs listes d'intervalles temporels [start, end] en une seule,
+    en combinant les chevauchements et en triant le tout.
+
+    Args:
+        list_of_snippet_lists (list): Liste de listes d'intervalles temporels,
+            chaque sous-liste ayant des timestamps au format ["HH:MM:SS", "HH:MM:SS"].
+
+    Returns:
+        list: Liste fusionnée d'intervalles temporels au format HH:MM:SS.
+    """
     all_segments = []
 
     # Aplatir et convertir en secondes
@@ -1138,6 +1401,24 @@ def adjust_parameters(base_params, video_duration, min_factor=0.6, max_factor=1.
 
 
 def detectHateSpeechSmartFilter(Video_path, Co2_release = "low"):
+    """
+    Applique une détection intelligente et multi-modalités de discours haineux dans une vidéo complète :
+    - audio (voix + émotion),
+    - image (gestes, symboles visuels),
+    - texte dans les images (OCR).
+
+    Le tout est réalisé avec une adaptation automatique des paramètres
+    en fonction de la durée de la vidéo et du niveau d’impact carbone souhaité.
+
+    Args:
+        Video_path (str): Chemin vers le fichier vidéo (.mp4).
+        Co2_release (str): Niveau d'émissions carbone autorisé ("low", "medium", "high").
+
+    Returns:
+        tuple:
+            - list: Intervalles détectés comme haineux (format HH:MM:SS).
+            - float: Quantité de CO₂ émise pendant l’analyse (en kg approx.).
+    """
     tracker = EmissionsTracker(log_level="error" , allow_multiple_runs=True)
     tracker.start()
 
@@ -1198,6 +1479,22 @@ def detectHateSpeechSmartFilter(Video_path, Co2_release = "low"):
 
 
 def Detect_hate_speech_emo_hate_bert(audio_path, Co2_release="low"):
+    """
+    Détecte le discours haineux uniquement dans la piste audio d’un fichier vidéo
+    en combinant : 
+    - transcription automatique (Whisper),
+    - détection d’émotion (SenseVoice),
+    - classification du texte émotionnel (EmoHateBERT).
+
+    Args:
+        audio_path (str): Chemin du fichier audio ou vidéo à analyser.
+        Co2_release (str): Niveau d'empreinte carbone autorisé ("low", "medium", "high").
+
+    Returns:
+        tuple:
+            - list: Timestamps détectés comme haineux (format HH:MM:SS).
+            - float: CO₂ émis pendant le traitement.
+    """
     tracker = EmissionsTracker(log_level="error", allow_multiple_runs=True)
     tracker.start()
     
