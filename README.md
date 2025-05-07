@@ -3,9 +3,9 @@
 
 ## 🔎 Overview
 
-This project provides an **intelligent and environmentally conscious platform** for detecting hate speech in **videos** and **audio** using a simple **Gradio interface**.
+This project provides an **intelligent and environmentally conscious platform** for detecting hate speech in **videos** and **audio** using a simple **Gradio/hugging Face interface**.
 
-It combines the latest tools in **NLP**, **emotion analysis**, **OCR**, and **computer vision**, with **CO₂ tracking**, to offer both performance and eco-responsibility.
+It combines the latest tools in **NLP**, **emotion analysis** and **computer vision**, with **CO₂ tracking**, to offer both performance and eco-responsibility.
 
 ---
 
@@ -14,16 +14,22 @@ It combines the latest tools in **NLP**, **emotion analysis**, **OCR**, and **co
 Developed at EPFL as part of an academic project.
 
 **Authors:**
-- Loris  
-- Mohammed  
-- Loïc  
+- Loris Alan Fabbro  
+- Mohammed Al-Hussini  
+- Loic Misenta  
 
+---
+## Dataset
+
+We use the HateMM dataset, consisting of ~43 hours of manually annotated videos from BitChute, labeled as hate or non-hate with relevant frame spans.
+This dataset was introduced in the paper "HateMM: A Multi-modal Dataset for Hate Video Classification."
+We thank the authors for making this resource publicly available.
 ---
 
 ## 🚀 Key Features
 
 ✅ Upload **videos (.mp4)** or **audios (.wav/.mp3)**  
-✅ 3-layer detection system (Audio / Vision / OCR-Text)  
+✅ 3-layer detection system (Audio / Images samples / OCR-Text)  
 ✅ Interactive results: **clickable hate segments**  
 ✅ Tracks and displays **carbon footprint** of analysis  
 ✅ Customizable eco modes:
@@ -37,19 +43,19 @@ Developed at EPFL as part of an academic project.
 
 | Stage              | Description                                                              |
 |-------------------|--------------------------------------------------------------------------|
-| **1. Audio Filter**   | `Whisper` (transcription) + `SenseVoiceSmall` (emotion) + `EmoHateBERT` (hate detection) |
-| **2. Visual Filter**  | `CLIP` to detect hateful gestures, scenes, or signs                   |
+| **1. Audio Filter**   | `Whisper` (transcription) + `SenseVoiceSmall` (emotion) + `EmoHateBERT` (hate speech detection) |
+| **2. Visual Filter**  | `CLIP` to detect hateful gestures, scenes, or signs etc                  |
 | **3. OCR Filter**     | `EasyOCR` + `hatebert` to catch hate in text from video frames       |
 | **Fusion Layer**      | Merges and expands detected segments across filters                   |
 | **CO₂ Tracker**       | Monitors emissions via `codecarbon` or `EmissionsTracker`             |
 
 ---
 
-## 🎛️ User Interface (Gradio)
-
+## 🎛️ Interface (Gradio/Hugging_face)
+link : https://huggingface.co/spaces/Lorissss/Detection_hate_speech
 The interface lets you:
 - Upload **a video or audio file**
-- Choose the **eco mode**
+- Choose the **eco mode** and run the **hate speech detection**
 - See **clickable hate timestamps**
 - View a summary:
   - total duration
@@ -58,11 +64,12 @@ The interface lets you:
 
 Example output:
 ```
-
+[VIDEO]
+[AUDIO]
 🕑 Segment 1: 00:01:15 ➔ 00:01:47
 🕑 Segment 2: 00:05:05 ➔ 00:05:21
-...
-♻️ CO₂ Emissions: 0.034g
+⏳ Total Hate Speech Duration: 0:05:30
+♻️ Carbon Footprint: 0.034g
 
 ```
 
@@ -75,7 +82,8 @@ Example output:
 .
 ├── app.py                  # Gradio interface
 ├── Implementation.py       # Full processing logic (audio, vision, OCR, NLP)
-├── model.py                # Pretrained model (.pt)
+├── model.py                # Pretrained model (.pt) + `student_distilled_EmoHateBERT.pt` + `EmoHateBert_teacher.pt`
+├── ctc_alignement.py 
 ├── pipeline.png            # Optional pipeline diagram
 ├── loading.gif             # Custom loading animation
 ├── requirements.txt        # Python dependencies
@@ -108,7 +116,7 @@ pip install -r requirements.txt
 5. **Launch the app**:
 
 ```bash
-python app2.py
+python app.py
 ```
 
 Then open the Gradio link provided (usually `http://localhost:7860/`).
@@ -138,8 +146,7 @@ Then open the Gradio link provided (usually `http://localhost:7860/`).
 ## 📜 License
 
 This project was developed as part of an **EPFL academic assignment**.
-All model rights belong to their respective authors.
-Usage is restricted to educational or non-commercial contexts.
+MIT License
 
 ---
 
