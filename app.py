@@ -1,7 +1,7 @@
 import gradio as gr
 import datetime
 import Implementation as imp
-import time  # pour simuler un vrai traitement
+import time  
 import os
 
 # ========== Fonctions Backend ==========
