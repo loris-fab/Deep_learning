@@ -1,5 +1,5 @@
 
-# 🎓 EPFL Project – Emotion- and Eco-Aware Hate Speech Detection in Video & Audio
+# 🎓 EPFL Project –Emotion & Eco- Aware Hate Speech Detection in Video & Audio
 
 ## 🔎 Overview
 
