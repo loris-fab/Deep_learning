@@ -24,6 +24,7 @@ Developed at EPFL as part of an academic project.
 We use the HateMM dataset, consisting of ~43 hours of manually annotated videos from BitChute, labeled as hate or non-hate with relevant frame spans.
 This dataset was introduced in the paper "HateMM: A Multi-modal Dataset for Hate Video Classification."
 We thank the authors for making this resource publicly available.
+
 ---
 
 ## 🚀 Key Features
