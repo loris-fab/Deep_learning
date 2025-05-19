@@ -7,6 +7,7 @@ This project provides an **intelligent and environmentally conscious platform** 
 
 It combines the latest tools in **NLP**, **emotion analysis** and **computer vision**, with **CO₂ tracking**, to offer both performance and eco-responsibility.
 
+![Pipeline Overview](pipeline.png)
 ---
 
 ## 👥 Team
